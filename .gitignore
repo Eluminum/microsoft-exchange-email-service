@@ -10,6 +10,7 @@
 target/
 out/
 build/
+.settings/
 
 # --- System Files ---
 .DS_Store
