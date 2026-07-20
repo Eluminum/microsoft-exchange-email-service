@@ -45,6 +45,7 @@ To run the application locally, inject your master key and Azure App Registratio
 -DAZURE_CLIENT_ID=YOUR_CLIENT_ID
 -DAZURE_CLIENT_SECRET=YOUR_CLIENT_SECRET
 -DAZURE_TENANT_ID=YOUR_TENANT_ID
+-Dapp.email.sender-upn=YOUR_EMAIL
 ```
 
 ## API Usage & Endpoints
