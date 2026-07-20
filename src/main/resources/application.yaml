@@ -1,0 +1,40 @@
+service:
+  url: https://localhost:8081/api/v1/email
+
+server:
+  port: '8081'
+  ssl:
+    enabled: true
+    key-store: classpath:certs/keystore-public.jks
+    key-store-password: ENC(Ciiyk7d9ZSOsrBuIlcocNCNCHIBB72NisyuerGVnfQdPhdW1rkydNuA3CzRac3iWhWPurG4mNq/B5v34BAgUBQ==)
+    key-store-type: JKS
+  
+azure:
+  graph:
+    base-url: https://graph.microsoft.com/v1.0
+    scopes: https://graph.microsoft.com/.default
+  identity:
+    client-id: ${AZURE_CLIENT_ID}
+    client-secret: ${AZURE_CLIENT_SECRET}
+    tenant-id: ${AZURE_TENANT_ID}
+
+logging:
+  level:
+    com.smartcode.email: DEBUG
+    reactor.netty: INFO
+
+app:
+  application: '@project.artifactId@'
+  apiVersion: '@project.version@'
+  email:
+    sender-upn: ${SENDER_UPN}
+
+exception:
+  ref: private
+
+message:
+  error:
+    general: Please contact our Support Team and supply your Correlation ID.
+    hint:
+      client: Check input fields and retry.
+      validation: Check input fields and retry.

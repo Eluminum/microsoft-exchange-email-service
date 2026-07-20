@@ -1,0 +1,188 @@
+openapi: 3.0.0
+info:
+  title: Microsoft Exchange Mail Service
+  description: |
+    A secure interface for dispatching automated correspondence through Microsoft Exchange.
+    
+    🤖 **AI AGENT INSTRUCTIONS**
+    This API is optimized for agentic outbound communication. Use the following guidelines:
+    - Always pass `X-CORRELATION-ID` to maintain transaction traceability.
+    - Validate template IDs before submission to prevent delivery failures.
+    - Responses include `deliveryTicket` which must be stored for audit logs.
+
+    **RECOVERY FLOW SUMMARY:**
+    | Status Code | Error Type | Recovery Strategy |
+    |-------------|------------|-------------------|
+    | 429 | Rate limit | Exponential backoff, max 3 retries |
+    | 500-504 | Exchange error | Check SMTP status, queue request for 1h retry |
+    | 400-415 | Payload error | Re-validate schema against template requirement |
+    | 401-403 | Auth error | Rotate Exchange Service Principal credentials |
+  version: 1.0.0
+  contact:
+    name: Architecture Group
+    email: support@smartcode.technology
+  x-ai-ready: true
+  x-agent-capabilities:
+    - email_dispatch
+    - template_rendering
+    - exchange_queueing
+
+servers:
+  - url: http://localhost:8080/api/v1/mail
+    description: Local secure relay to Microsoft Exchange
+
+paths:
+  /health:
+    get:
+      summary: System health check
+      operationId: getHealth
+      tags:
+        - System
+      parameters:
+        - name: X-CORRELATION-ID
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /send:
+    post:
+      summary: Queue and dispatch an email via Microsoft Exchange
+      description: |
+        Processes a structured email request, renders the template, and attempts
+        delivery to the designated Exchange endpoint.
+        
+        🤖 **AI AGENT GUIDANCE:**
+        - Use this tool when business logic requires notifying a human or system stakeholder.
+        - Ensure `recipient` and `templateId` are sanitized before request construction.
+      operationId: sendEmail
+      tags:
+        - Mail
+      parameters:
+        - name: X-CORRELATION-ID
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailRequest'
+      responses:
+        '202':
+          description: Email accepted and queued for Exchange delivery.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MailDeliveryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  responses:
+    BadRequest:
+      description: Invalid email format or missing required template fields.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalServerError:
+      description: Failure communicating with Microsoft Exchange.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - timestamp
+      properties:
+        status:
+          type: string
+          example: "UP"
+        apiVersion:
+          type: string
+          example: "0.0.1-SNAPSHOT"
+        timestamp:
+          type: string
+          format: date-time
+        exchangeConnectivity:
+          type: boolean
+          description: Status of the connection to Microsoft Graph
+
+    EmailRequest:
+      type: object
+      required:
+        - to
+        - messageType
+      properties:
+        to:
+          type: array
+          items: { type: string, format: email }
+          description: Primary recipients.
+        cc:
+          type: array
+          items: { type: string, format: email }
+        subject:
+          type: string
+          description: Email subject line.
+        body:
+          type: string
+          description: Plain text or HTML body content.
+        messageType:
+          type: string
+          enum: [HTML, Text]
+          default: Text
+        priority:
+          type: string
+          enum: [NORMAL, HIGH, URGENT]
+          default: NORMAL
+
+    MailDeliveryResponse:
+      type: object
+      required:
+        - deliveryTicket
+        - status
+      properties:
+        deliveryTicket:
+          type: string
+          format: uuid
+        status:
+          type: string
+          example: "QUEUED"
+        exchangeQueueId:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required:
+        - correlationId
+        - message
+        - recoveryHints
+      properties:
+        correlationId:
+          type: string
+        message:
+          type: string
+        recoveryHints:
+          type: object
+          properties:
+            retryable:
+              type: boolean
+            recommendedAction:
+              type: string
