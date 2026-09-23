@@ -1,5 +1,6 @@
 package co.eluminum.api.email.service.impl;
 
+import co.eluminum.api.email.common.config.mdc.MDCContext;
 import co.eluminum.api.email.dto.SendEmailRequest;
 import co.eluminum.api.email.dto.SendEmailResponse;
 import co.eluminum.api.email.service.SendEmailService;
@@ -49,14 +50,29 @@ public class SendEmailServiceImpl implements SendEmailService {
             "saveToSentItems",
             "true");
 
-    return graphWebClient
-        .post()
-        .uri("/users/{id}/sendMail", senderUpn)
-        .bodyValue(emailPayload)
-        .retrieve()
-        .toBodilessEntity()
-        .thenReturn(new SendEmailResponse("TICKET-" + System.currentTimeMillis(), "SUCCESS"))
-        .doOnError(e -> log.error("Failed to send email: {}", e.getMessage()))
-        .onErrorReturn(new SendEmailResponse(null, "FAILED"));
+    return Mono.deferContextual(
+        ctx -> {
+          MDCContext mdc = ctx.get(MDCContext.class);
+          long startTime = System.currentTimeMillis();
+          log.info("{} START: Send Email To {} [Timestamp: {}]", mdc.getLogPrefix(), request.to(), startTime);
+
+          return graphWebClient
+              .post()
+              .uri("/users/{id}/sendMail", senderUpn)
+              .bodyValue(emailPayload)
+              .retrieve()
+              .toBodilessEntity()
+              .doOnSubscribe(_ -> log.info("{} GRAPH_API_CALL: Initiating request to Microsoft Graph [Elapsed: {}ms]", 
+                  mdc.getLogPrefix(), System.currentTimeMillis() - startTime))
+              .thenReturn(new SendEmailResponse("TICKET-" + System.currentTimeMillis(), "SUCCESS"))
+              .doOnSuccess(res -> log.info("{} GRAPH_API_SUCCESS: Received response from Microsoft Graph [Elapsed: {}ms, Status: {}]", 
+                  mdc.getLogPrefix(), System.currentTimeMillis() - startTime, res.status()))
+              .doOnError(
+                  e -> log.error("{} Failed to send email after {}ms: {}", 
+                      mdc.getLogPrefix(), System.currentTimeMillis() - startTime, e.getMessage()))
+              .onErrorReturn(new SendEmailResponse(null, "FAILED"))
+              .doFinally(signalType -> log.info("{} END: Send Email [Signal: {}, Total Elapsed: {}ms]", 
+                  mdc.getLogPrefix(), signalType, System.currentTimeMillis() - startTime));
+        });
   }
 }
